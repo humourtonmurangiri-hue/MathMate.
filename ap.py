@@ -7,9 +7,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Page configuration
-st.set_page_config(page_title="MathMate", page_icon="📚", layout="centered")
+st.set_page_config(page_title="Yumat MathMate", page_icon="📚", layout="centered")
 
-st.title("📚 MATHMATE - Smart Tutor")
+st.title("📚 YUMAT MATHMATE - Smart Tutor")
 st.write("Type full questions or commands—MathMate extracts and solves the math automatically!")
 
 # Setup variables & symbols
