@@ -10,7 +10,7 @@ import numpy as np
 st.set_page_config(page_title="Yumat MathMate", page_icon="📚", layout="centered")
 
 st.title("📚 YUMAT MATHMATE - Smart Tutor")
-st.write("Type full questions or commands—MathMate extracts and solves the math automatically!")
+st.write("Ask full conversational questions—Yumat MathMate extracts and solves the math automatically!")
 
 # Setup variables & symbols
 x, y, z = sp.symbols('x y z')
@@ -27,47 +27,51 @@ math_namespace = {
     'M': M, 'Matrix': M, 'x': x, 'y': y, 'z': z
 }
 
-# Advanced Extractor & Intent Classifier
+def clean_input(text):
+    """Normalize common math notation from natural language text."""
+    # Convert implied multiplication like 3x or 3(x) to explicit math (3*x)
+    text = re.sub(r'(\d)\s*([a-zA-Z\(])', r'\1*\2', text)
+    # Convert exponents like x^2 to sympy format x**2
+    text = text.replace('^', '**')
+    return text
+
 def process_question(text):
     text_clean = text.strip()
     
     # 1. Plotting Intent
     if re.search(r'\b(plot|graph|draw)\b', text_clean, re.IGNORECASE):
-        # Extract expression inside plot(...) or after keywords
         match = re.search(r'plot\((.*?)\)', text_clean, re.IGNORECASE)
         if match:
-            return "plot", match.group(1)
-        # Extract equation or expression after keywords like "graph y =" or "plot x**2"
+            return "plot", clean_input(match.group(1))
         expr_match = re.search(r'(?:plot|graph|draw)\s+(?:y\s*=\s*)?([x0-9\+\-\*\/\^\(\)\s]+)', text_clean, re.IGNORECASE)
         if expr_match:
-            return "plot", expr_match.group(1).strip()
+            return "plot", clean_input(expr_match.group(1).strip())
 
     # 2. Calculus: Derivative Intent
-    if re.search(r'\b(differentiate|derivative|find\s+d/dx)\b', text_clean, re.IGNORECASE):
-        expr_match = re.search(r'(?:differentiate|derivative\s+of|d/dx)\s+([x0-9\+\-\*\/\^\(\)\s]+)', text_clean, re.IGNORECASE)
+    if re.search(r'\b(differentiate|derivative|find\s+d/dx|diff)\b', text_clean, re.IGNORECASE):
+        expr_match = re.search(r'(?:differentiate|derivative\s+of|d/dx|diff)\s+([x0-9\+\-\*\/\^\(\)\s]+)', text_clean, re.IGNORECASE)
         if expr_match:
-            return "derivative", expr_match.group(1).strip()
+            return "derivative", clean_input(expr_match.group(1).strip())
 
     # 3. Calculus: Integral Intent
     if re.search(r'\b(integrate|integral)\b', text_clean, re.IGNORECASE):
         expr_match = re.search(r'(?:integrate|integral\s+of)\s+([x0-9\+\-\*\/\^\(\)\s]+)', text_clean, re.IGNORECASE)
         if expr_match:
-            return "integral", expr_match.group(1).strip()
+            return "integral", clean_input(expr_match.group(1).strip())
 
-    # 4. Equation Solving Intent (contains '=' or words like 'solve')
+    # 4. Equation Solving Intent
     if "=" in text_clean:
-        # Extract full equation containing '='
         eq_match = re.search(r'([x0-9\+\-\*\/\^\(\)\s]+=[x0-9\+\-\*\/\^\(\)\s]+)', text_clean)
         if eq_match:
-            return "solve", eq_match.group(1).strip()
+            return "solve", clean_input(eq_match.group(1).strip())
 
     # 5. Direct Evaluation / Statistics
-    return "eval", text_clean
+    return "eval", clean_input(text_clean)
 
 # User Input
 user_query = st.text_input(
     "Ask a question:", 
-    placeholder="e.g. Can you solve 3*x + 10 = 25 for me? or Plot x**2 - 4"
+    placeholder="e.g. Can you solve 3x + 10 = 25 for me? or Plot x^2 - 4"
 )
 
 if user_query:
@@ -90,7 +94,7 @@ if user_query:
             st.pyplot(fig)
             st.info(f"Extracted expression: `{extracted_expr}`")
         except Exception as e:
-            st.error(f"Could not plot: {e}")
+            st.error(f"Could not plot expression: {e}")
 
     # Execution: Derivatives
     elif intent == "derivative":
@@ -99,8 +103,9 @@ if user_query:
             diff_res = sp.diff(expr, x)
             st.subheader("Derivative Result:")
             st.write(f"$$\\frac{{d}}{{dx}}({sp.latex(expr)}) = {sp.latex(diff_res)}$$")
+            st.info(f"Extracted expression: `{extracted_expr}`")
         except Exception as e:
-            st.error("Could not calculate derivative.")
+            st.error(f"Could not calculate derivative: {e}")
 
     # Execution: Integrals
     elif intent == "integral":
@@ -109,8 +114,9 @@ if user_query:
             int_res = sp.integrate(expr, x)
             st.subheader("Integral Result:")
             st.write(f"$$\\int ({sp.latex(expr)})\\,dx = {sp.latex(int_res)} + C$$")
+            st.info(f"Extracted expression: `{extracted_expr}`")
         except Exception as e:
-            st.error("Could not calculate integral.")
+            st.error(f"Could not calculate integral: {e}")
 
     # Execution: Equation Solving
     elif intent == "solve":
@@ -124,7 +130,7 @@ if user_query:
             st.success(f"**x = {sol}**")
             st.caption(f"Filtered equation: `{extracted_expr}`")
         except Exception as e:
-            st.error("Couldn't parse equation. Ensure explicit multiplication like `3*x`.")
+            st.error(f"Couldn't parse equation: {e}")
 
     # Execution: Fallback Evaluation
     else:
