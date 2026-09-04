@@ -2,3 +2,6 @@ streamlit
 sympy
 matplotlib
 numpy
+pytesseract
+Pillow
+

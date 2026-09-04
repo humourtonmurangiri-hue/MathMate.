@@ -5,12 +5,14 @@ import re
 import sympy as sp
 import matplotlib.pyplot as plt
 import numpy as np
+import pytesseract
+from PIL import Image
 
 # Page configuration
 st.set_page_config(page_title="Yumat MathMate", page_icon="📚", layout="centered")
 
 st.title("📚 YUMAT MATHMATE - Smart Tutor")
-st.write("Ask full conversational questions—Yumat MathMate extracts and solves the math automatically!")
+st.write("Solve math problems via text or by uploading an image!")
 
 # Setup variables & symbols
 x, y, z = sp.symbols('x y z')
@@ -28,17 +30,14 @@ math_namespace = {
 }
 
 def clean_input(text):
-    """Normalize common math notation from natural language text."""
-    # Convert implied multiplication like 3x or 3(x) to explicit math (3*x)
+    """Normalize common math notation from natural language or OCR text."""
     text = re.sub(r'(\d)\s*([a-zA-Z\(])', r'\1*\2', text)
-    # Convert exponents like x^2 to sympy format x**2
     text = text.replace('^', '**')
     return text
 
 def process_question(text):
     text_clean = text.strip()
     
-    # 1. Plotting Intent
     if re.search(r'\b(plot|graph|draw)\b', text_clean, re.IGNORECASE):
         match = re.search(r'plot\((.*?)\)', text_clean, re.IGNORECASE)
         if match:
@@ -47,37 +46,24 @@ def process_question(text):
         if expr_match:
             return "plot", clean_input(expr_match.group(1).strip())
 
-    # 2. Calculus: Derivative Intent
     if re.search(r'\b(differentiate|derivative|find\s+d/dx|diff)\b', text_clean, re.IGNORECASE):
         expr_match = re.search(r'(?:differentiate|derivative\s+of|d/dx|diff)\s+([x0-9\+\-\*\/\^\(\)\s]+)', text_clean, re.IGNORECASE)
         if expr_match:
             return "derivative", clean_input(expr_match.group(1).strip())
 
-    # 3. Calculus: Integral Intent
     if re.search(r'\b(integrate|integral)\b', text_clean, re.IGNORECASE):
         expr_match = re.search(r'(?:integrate|integral\s+of)\s+([x0-9\+\-\*\/\^\(\)\s]+)', text_clean, re.IGNORECASE)
         if expr_match:
             return "integral", clean_input(expr_match.group(1).strip())
 
-    # 4. Equation Solving Intent
     if "=" in text_clean:
         eq_match = re.search(r'([x0-9\+\-\*\/\^\(\)\s]+=[x0-9\+\-\*\/\^\(\)\s]+)', text_clean)
         if eq_match:
             return "solve", clean_input(eq_match.group(1).strip())
 
-    # 5. Direct Evaluation / Statistics
     return "eval", clean_input(text_clean)
 
-# User Input
-user_query = st.text_input(
-    "Ask a question:", 
-    placeholder="e.g. Can you solve 3x + 10 = 25 for me? or Plot x^2 - 4"
-)
-
-if user_query:
-    intent, extracted_expr = process_question(user_query)
-    
-    # Execution: Plotting
+def execute_math(intent, extracted_expr):
     if intent == "plot":
         try:
             expr = sp.sympify(extracted_expr)
@@ -96,7 +82,6 @@ if user_query:
         except Exception as e:
             st.error(f"Could not plot expression: {e}")
 
-    # Execution: Derivatives
     elif intent == "derivative":
         try:
             expr = sp.sympify(extracted_expr)
@@ -107,7 +92,6 @@ if user_query:
         except Exception as e:
             st.error(f"Could not calculate derivative: {e}")
 
-    # Execution: Integrals
     elif intent == "integral":
         try:
             expr = sp.sympify(extracted_expr)
@@ -118,7 +102,6 @@ if user_query:
         except Exception as e:
             st.error(f"Could not calculate integral: {e}")
 
-    # Execution: Equation Solving
     elif intent == "solve":
         try:
             left_str, right_str = extracted_expr.split("=")
@@ -132,11 +115,41 @@ if user_query:
         except Exception as e:
             st.error(f"Couldn't parse equation: {e}")
 
-    # Execution: Fallback Evaluation
     else:
         try:
             result = eval(extracted_expr, {"__builtins__": None}, math_namespace)
             st.subheader("Answer:")
             st.write(result)
         except Exception:
-            st.error("Could not parse request. Try rephrasing your question clearly.")
+            st.error("Could not parse request. Try rephrasing or ensuring clear handwritten text.")
+
+# UI Tabs: Text vs Image Input
+tab1, tab2 = st.tabs(["💬 Text Input", "📷 Upload Image"])
+
+with tab1:
+    user_query = st.text_input(
+        "Ask a question:", 
+        placeholder="e.g. Can you solve 3x + 10 = 25 for me? or Plot x^2 - 4"
+    )
+    if user_query:
+        intent, extracted_expr = process_question(user_query)
+        execute_math(intent, extracted_expr)
+
+with tab2:
+    uploaded_file = st.file_uploader("Upload a clear photo of your math question:", type=["jpg", "jpeg", "png"])
+    if uploaded_file is not None:
+        image = Image.open(uploaded_file)
+        st.image(image, caption="Uploaded Image", use_container_width=True)
+        
+        with st.spinner("Reading math from image..."):
+            try:
+                extracted_text = pytesseract.image_to_string(image)
+                st.write("**Extracted Text from Image:**", f"`{extracted_text.strip()}`")
+                
+                if extracted_text.strip():
+                    intent, extracted_expr = process_question(extracted_text)
+                    execute_math(intent, extracted_expr)
+                else:
+                    st.warning("No text detected in the image.")
+            except Exception as e:
+                st.error(f"Error processing image: {e}")
